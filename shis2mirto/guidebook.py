@@ -23,8 +23,11 @@ import logging
 
 log = logging.getLogger(__name__)
 
-# constants for the input fov file
+# constants for the input wave numbers file
 INPUT_WAVE_NUMBER_VAR_NAME             = 'wavenumber'
+
+# constants for the input pressure levels file
+INPUT_PRESSURE_LEVELS_VAR_NAME         = 'PressureLevels'
 
 # constants for the SHIS data file
 SHIS_WAVE_NUMBER_VAR_NAME              = 'wavenumber'
@@ -32,6 +35,8 @@ SHIS_FOV_ANGLE_VAR_NAME                = 'FOVangle'
 SHIS_RADIANCE_VAR_NAME                 = "radiance"
 SHIS_LON_VAR_NAME                      = 'Longitude'
 SHIS_LAT_VAR_NAME                      = 'Latitude'
+SHIS_BASE_TIME_VAR_NAME                = "base_time"
+SHIS_TIME_OFFSET_VAR_NAME              = "time_offset"
 
 # constants for the output fov.nc file
 OUT_FOV_FILE_NAME                      = "fov.nc"
@@ -40,6 +45,9 @@ OUT_FOV_NUM_CHANNELS_DIM_NAME          = "channels"
 OUT_FOV_NUM_SELECTED_CHANNELS_DIM_NAME = "selected_channels"
 OUT_FOV_LON_VAR_NAME                   = 'Longitude'
 OUT_FOV_LAT_VAR_NAME                   = 'Latitude'
+OUT_FOV_BASE_TIME_VAR_NAME             = "base_time"
+OUT_FOV_TIME_OFFSET_VAR_NAME           = "time_offset"
+OUT_FOV_MATLAB_DATENUM_TIME_VAR_NAME   = "TimeFracDay"
 OUT_FOV_FOV_ANGLE_VAR_NAME             = 'FOVangle'
 OUT_FOV_RADIANCE_VAR_NAME              = 'Radiance'
 OUT_FOV_WAVE_NUMBER_VAR_NAME           = "Wavenumber"
