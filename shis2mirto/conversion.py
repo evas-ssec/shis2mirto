@@ -556,7 +556,7 @@ examples:
         # open the pressure levels file and get the list of pressure levels
         plvls_file = nc.Dataset(clean_path(options.plevels_input), 'r')
         plvls_data = numpy.sort(plvls_file.variables[INPUT_PRESSURE_LEVELS_VAR_NAME][:])[::-1]
-        plvls_file.
+        plvls_file.close()
 
         log.info("Running Virtual Radiosonde code")
 
