@@ -546,16 +546,20 @@ examples:
         desired_points = [ ]
         for index in range(0, lon_data.size) :
             desired_points.append({
-                                    'datetime':  dt_times[index],
-                                    'latitude':  lat_data[index],
-                                    'longitude': lon_data[index]
+                                    VR_INPUT_DATETIME_KEY: dt_times[index],
+                                    VR_INPUT_LAT_KEY:      lat_data[index],
+                                    VR_INPUT_LON_KEY:      lon_data[index]
                                   })
+        num_obs = len(desired_points)
 
         log.info("Loading pressure levels from file")
+
+        #print("Number of selected points: " + str(num_obs))
 
         # open the pressure levels file and get the list of pressure levels
         plvls_file = nc.Dataset(clean_path(options.plevels_input), 'r')
         plvls_data = numpy.sort(plvls_file.variables[INPUT_PRESSURE_LEVELS_VAR_NAME][:])[::-1]
+        num_plvls  = plvls_data.size
         plvls_file.close()
 
         log.info("Running Virtual Radiosonde code")
@@ -565,14 +569,115 @@ examples:
         cache_dir = os.path.join('/tmp/vr/', stamp)
         if not os.path.exists(cache_dir) :
             os.mkdir(cache_dir)
-        # TODO, probably need to do bilinear interpolation, this may need to be a user knob
+        # confirmed that the interpolation kwarg is only for temporal interpolation (spatial interpolation is always bilinear)
+        # TODO, may want to have a user knob to control temporal interpolation type
         src = radiosonde.VirtualRadiosondeNarrator(on_dread=True, levels=plvls_data, cache=cache_dir)
         results = list(src(desired_points))
 
-        #print("results: " + str(results[0].keys()))
+        #print("results:    " + str(results[0].keys()))
+        #print("tdry shape: " + str(results[0][VR_TEMPERATURE_KEY].shape))
+        #print("pres shape: " + str(results[0]['pres'].shape))
 
-        # TODO, modify the virtual radiosonde data to make the fg file
+        log.info("Creating fg.nc file")
 
+        # create the first guess file
+        # TODO, check existence for dir and file
+        out_fg_file = nc.Dataset(os.path.join(options.output, OUT_FG_FILE_NAME), 'w', format="NETCDF3_CLASSIC")
+
+        # build the dimensions for the first guess file
+        num_emiss_consts = SURFACE_EMISSIVITY_COEFFICIENTS.size
+        state_vector_size = num_plvls * 4 + 1 + num_emiss_consts
+        out_fg_file.createDimension(OUT_FG_NUM_STATEVAR_DIM_NAME,          size=state_vector_size)
+        out_fg_file.createDimension(OUT_FG_OBS_NUM_DIM_NAME,               size=num_obs)
+        out_fg_file.createDimension(OUT_FG_STATEVAR_DIMS_DIM_NAME,         size=6)
+        out_fg_file.createDimension(OUT_FG_NUM_SELECTED_STATEVAR_DIM_NAME, size=state_vector_size) # TODO, don't know how these are selected yet
+
+        # build the various first guess file variables using the virtual radiosonde data
+
+        # create the first guess state vector
+        # this is built up of several different things:
+        """
+        Temperature in [K] <- num_plvls values
+		Water vapor in [log(q)] where q is psecific humidity in [kg/kg] <- num_plvls values
+		Carbon dioxide [ ppmv ] <- num_plvls values (may be constant repeated or from GFS data)
+		Ozone  in [log(q)] where q is psecific humidity in [kg/kg] <- num_plvls values (may be constant repeated or from GFS data)
+		Surface temperature in [K] <- one value (probably from GFS data?)
+		Surface emissivity principal component coefficients in logit space <- 5 values, constants from Paolo
+        """
+
+        # allocate some space to hold the values for the parts of the state vector
+        temperature  = numpy.ones((num_obs, num_plvls), dtype=numpy.float32) * numpy.nan # this is the temp profile
+        pressure     = numpy.ones((num_obs, num_plvls), dtype=numpy.float32) * numpy.nan # this is the pressure profile
+        water_vapor  = numpy.ones((num_obs, num_plvls), dtype=numpy.float32) * numpy.nan
+        c02_value    = numpy.ones((num_obs, num_plvls), dtype=numpy.float32) * C02_CONST_STARTING_PT_IN_PPMV
+        ozone        = numpy.ones((num_obs, num_plvls), dtype=numpy.float32) * numpy.nan
+        surface_temp = numpy.ones((num_obs, 1),         dtype=numpy.float32) * numpy.nan
+        surface_pres = numpy.ones((num_obs, 1),         dtype=numpy.float32) * numpy.nan
+
+        # pull the appropriate values out of the virtual radiosonde data
+        for index in range(0, len(results)) :
+            current_pt = results[index]
+            temperature[index] = current_pt[VR_TEMPERATURE_KEY] + CELSIUS_TO_KELVIN_ADD_CONST # vr is in C, we need K
+            pressure   [index] = current_pt[VR_PRESSURE_KEY]
+            # TODO water vapor
+            # TODO optionally C02
+            # TODO Ozone
+            # TODO surface temperature
+            # TODO surface pressure
+
+        # create the base state vector
+        state_vector_data = numpy.append(temperature,       water_vapor,  axis=1)
+        state_vector_data = numpy.append(state_vector_data, c02_value,    axis=1)
+        state_vector_data = numpy.append(state_vector_data, ozone,        axis=1)
+        state_vector_data = numpy.append(state_vector_data, surface_temp, axis=1)
+        temp_coeffs       = numpy.reshape(SURFACE_EMISSIVITY_COEFFICIENTS, (num_emiss_consts, 1))
+        temp_coeffs       = numpy.reshape(numpy.tile(SURFACE_EMISSIVITY_COEFFICIENTS, num_obs), (num_obs, num_emiss_consts))
+        state_vector_data = numpy.append(state_vector_data, temp_coeffs,  axis=1)
+
+        # create the pressure version of the state vector
+        press_vector_data = numpy.append(pressure,          pressure,     axis=1)
+        press_vector_data = numpy.append(press_vector_data, pressure,     axis=1)
+        press_vector_data = numpy.append(press_vector_data, pressure,     axis=1)
+        press_vector_data = numpy.append(press_vector_data, surface_pres, axis=1)
+        press_vector_data = numpy.append(press_vector_data, surface_pres, axis=1)
+        press_vector_data = numpy.append(press_vector_data, surface_pres, axis=1)
+        press_vector_data = numpy.append(press_vector_data, surface_pres, axis=1)
+        press_vector_data = numpy.append(press_vector_data, surface_pres, axis=1)
+        press_vector_data = numpy.append(press_vector_data, surface_pres, axis=1)
+
+        # create xa and x0
+        temp_var = out_fg_file.createVariable(OUT_FG_LIN_POINT_VAR_NAME, 'f8', (OUT_FG_OBS_NUM_DIM_NAME, OUT_FG_NUM_STATEVAR_DIM_NAME))
+        temp_var[0:num_obs, 0:state_vector_size] = state_vector_data
+        temp_var = out_fg_file.createVariable(OUT_FG_FIRST_GUESS_STATE_VEC_VAR_NAME, 'f8', (OUT_FG_OBS_NUM_DIM_NAME, OUT_FG_NUM_STATEVAR_DIM_NAME))
+        temp_var[0:num_obs, 0:state_vector_size] = state_vector_data
+
+        # create p
+        temp_var = out_fg_file.createVariable(OUT_FG_PRESSURE_GRID_VAR_NAME, 'f8', (OUT_FG_OBS_NUM_DIM_NAME, OUT_FG_NUM_STATEVAR_DIM_NAME))
+        temp_var[0:num_obs, 0:state_vector_size] = press_vector_data
+
+        # create xdim
+        temp_var = out_fg_file.createVariable(OUT_FG_STATE_VECTOR_DIMS_VAR_NAME, 'f8', (OUT_FG_STATEVAR_DIMS_DIM_NAME))
+        temp_var[0:6] = numpy.array([num_plvls, num_plvls, num_plvls, num_plvls, 1, num_emiss_consts])
+
+        # create varindx
+        temp_selected_indx = numpy.array(range(0, state_vector_size)) # TODO, don't know how these are selected
+        temp_var = out_fg_file.createVariable(OUT_FG_SEL_STATE_VECTOR_IDX_VAR_NAME, 'f8', (OUT_FG_NUM_SELECTED_STATEVAR_DIM_NAME))
+        temp_var[0:state_vector_size] = temp_selected_indx + 1 # use matlab indexing
+
+        # create selxa and selx0
+        temp_var = out_fg_file.createVariable(OUT_FG_SEL_LIN_POINT_VAR_NAME, 'f8', (OUT_FG_OBS_NUM_DIM_NAME, OUT_FG_NUM_SELECTED_STATEVAR_DIM_NAME))
+        temp_var[0:num_obs, 0:state_vector_size] = state_vector_data
+        temp_var = out_fg_file.createVariable(OUT_FG_SEL_FG_STATE_VEC_VAR_NAME, 'f8', (OUT_FG_OBS_NUM_DIM_NAME, OUT_FG_NUM_SELECTED_STATEVAR_DIM_NAME))
+        temp_var[0:num_obs, 0:state_vector_size] = state_vector_data
+
+        # create selp
+        temp_var = out_fg_file.createVariable(OUT_FG_SEL_PRESSURE_GRID_VAR_NAME, 'f8', (OUT_FG_OBS_NUM_DIM_NAME, OUT_FG_NUM_SELECTED_STATEVAR_DIM_NAME))
+        temp_var[0:num_obs, 0:state_vector_size] = press_vector_data
+
+        # close the finished file
+        out_fg_file.close()
+
+        log.info("Finished saving fg.nc to file")
 
     def help(command=None):
         """print help for a specific command or list of commands
