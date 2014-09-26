@@ -60,8 +60,14 @@ OUT_FOV_SELECTED_RADIANCE_VAR_NAME     = "selradiances"
 VR_INPUT_DATETIME_KEY                  = 'datetime'
 VR_INPUT_LON_KEY                       = 'longitude'
 VR_INPUT_LAT_KEY                       = 'latitude'
+VR_INPUT_SURFACE_TEMPERATURE_KEY       = ("Temperature","surface")
+VR_INPUT_SEA_SURFACE_PRESSURE_KEY      = ("Pressure reduced to MSL","meanSea")
+VR_INPUT_OZONE_MR_KEY                  = "Ozone mixing ratio"
 VR_TEMPERATURE_KEY                     = 'tdry'
 VR_PRESSURE_KEY                        = 'pres'
+VR_OZONE_MR_KEY                        = 'Ozone mixing ratio'
+VR_SURFACE_TEMPERATURE_KEY             = 'Temperature_surface'
+VR_SEA_SURFACE_PRESSURE_KEY            = 'Pressure reduced to MSL_meanSea'
 
 # constants for the output fg.nc file
 OUT_FG_FILE_NAME                       = "fg.nc"

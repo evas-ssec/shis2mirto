@@ -29,8 +29,13 @@ import numpy as numpy
 from datetime import datetime, timedelta
 
 import virtual_radiosonde_source.vrsNarrator as radiosonde
+from virtual_radiosonde_source.vrsNarrator import DEFAULT_CHANNELS
 
 from shis2mirto.guidebook import *
+
+CHANNELS_TEMP = DEFAULT_CHANNELS.union(set([VR_INPUT_SURFACE_TEMPERATURE_KEY,
+                                            VR_INPUT_SEA_SURFACE_PRESSURE_KEY,
+                                            VR_INPUT_OZONE_MR_KEY]))
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +46,23 @@ def datetime_to_matlab_datenum (time):
     final_datenum      = base_date_num + additional_seconds
 
     return final_datenum
+
+def relative_humidity_to_specific_humidity (relative_humidity_ratio_profile, temperature_profile) :
+    """convert the relative humidity to a specific humidity
+
+    :param relative_humidity_ratio_profile:
+    :param temperature_profile:
+    :return:
+    """
+
+    # qair <- rh * 2.541e6 * exp(-5415.0 / T) * 18/29
+
+    temp_rh = relative_humidity_ratio_profile * 2.541e6
+    temp_t  = numpy.power(numpy.ones(temperature_profile.shape) * -5415.0, temperature_profile)
+
+    specific_humidity = temp_rh * temp_t * (18 / 29)
+
+    return specific_humidity
 
 def get_version_string() :
     version_num = pkg_resources.require('shis2mirto')[0].version
@@ -571,10 +593,10 @@ examples:
             os.mkdir(cache_dir)
         # confirmed that the interpolation kwarg is only for temporal interpolation (spatial interpolation is always bilinear)
         # TODO, may want to have a user knob to control temporal interpolation type
-        src = radiosonde.VirtualRadiosondeNarrator(on_dread=True, levels=plvls_data, cache=cache_dir)
+        src = radiosonde.VirtualRadiosondeNarrator(on_dread=True, levels=plvls_data, cache=cache_dir, channels=CHANNELS_TEMP)
         results = list(src(desired_points))
 
-        #print("results:    " + str(results[0].keys()))
+        print("results:    " + str(results[0].keys()))
         #print("tdry shape: " + str(results[0][VR_TEMPERATURE_KEY].shape))
         #print("pres shape: " + str(results[0]['pres'].shape))
 
@@ -617,20 +639,22 @@ examples:
         # pull the appropriate values out of the virtual radiosonde data
         for index in range(0, len(results)) :
             current_pt = results[index]
-            temperature[index] = current_pt[VR_TEMPERATURE_KEY] + CELSIUS_TO_KELVIN_ADD_CONST # vr is in C, we need K
-            pressure   [index] = current_pt[VR_PRESSURE_KEY]
-            # TODO water vapor
-            # TODO optionally C02
-            # TODO Ozone
-            # TODO surface temperature
-            # TODO surface pressure
+            temperature[index]  = current_pt[VR_TEMPERATURE_KEY] + CELSIUS_TO_KELVIN_ADD_CONST # vr is in C, we need K
+            pressure   [index]  = current_pt[VR_PRESSURE_KEY]
+            # water vapor is the log of specific water vapor
+            water_vapor[index]  = numpy.log(relative_humidity_to_specific_humidity(current_pt['rh'] / 100.0, temperature[index]))
+            # ozone is the log of the specific humidity
+            temp_ozone_mr       = current_pt[VR_OZONE_MR_KEY]
+            ozone[index]        = numpy.log(temp_ozone_mr / (temp_ozone_mr + 1)) # convert from mixing ratio to specific humidity and take the log
+            # Note: for very small mixing ratios of ozone this conversion may not make a lot of different
+            surface_temp[index] = current_pt[VR_SURFACE_TEMPERATURE_KEY] # surface temperature is already in K
+            surface_pres[index] = current_pt[VR_SEA_SURFACE_PRESSURE_KEY]
 
         # create the base state vector
         state_vector_data = numpy.append(temperature,       water_vapor,  axis=1)
         state_vector_data = numpy.append(state_vector_data, c02_value,    axis=1)
         state_vector_data = numpy.append(state_vector_data, ozone,        axis=1)
         state_vector_data = numpy.append(state_vector_data, surface_temp, axis=1)
-        temp_coeffs       = numpy.reshape(SURFACE_EMISSIVITY_COEFFICIENTS, (num_emiss_consts, 1))
         temp_coeffs       = numpy.reshape(numpy.tile(SURFACE_EMISSIVITY_COEFFICIENTS, num_obs), (num_obs, num_emiss_consts))
         state_vector_data = numpy.append(state_vector_data, temp_coeffs,  axis=1)
 
