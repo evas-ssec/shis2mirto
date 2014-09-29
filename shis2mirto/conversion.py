@@ -58,9 +58,9 @@ def relative_humidity_to_specific_humidity (relative_humidity_ratio_profile, tem
     # qair <- rh * 2.541e6 * exp(-5415.0 / T) * 18/29
 
     temp_rh = relative_humidity_ratio_profile * 2.541e6
-    temp_t  = numpy.power(numpy.ones(temperature_profile.shape) * -5415.0, temperature_profile)
+    temp_t  = numpy.exp(numpy.ones(temperature_profile.shape) * -5415.0 / temperature_profile)
 
-    specific_humidity = temp_rh * temp_t * (18 / 29)
+    specific_humidity = temp_rh * temp_t * (18.0 / 29.0)
 
     return specific_humidity
 
