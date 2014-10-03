@@ -596,7 +596,9 @@ examples:
         src = radiosonde.VirtualRadiosondeNarrator(on_dread=True, levels=plvls_data, cache=cache_dir, channels=CHANNELS_TEMP)
         results = list(src(desired_points))
 
-        print("results:    " + str(results[0].keys()))
+        #print("original pressures: " + str(plvls_data))
+
+        #print("results:    " + str(results[0].keys()))
         #print("tdry shape: " + str(results[0][VR_TEMPERATURE_KEY].shape))
         #print("pres shape: " + str(results[0]['pres'].shape))
 
@@ -642,7 +644,9 @@ examples:
             temperature[index]  = current_pt[VR_TEMPERATURE_KEY] + CELSIUS_TO_KELVIN_ADD_CONST # vr is in C, we need K
             pressure   [index]  = current_pt[VR_PRESSURE_KEY]
             # water vapor is the log of specific water vapor
-            water_vapor[index]  = numpy.log(relative_humidity_to_specific_humidity(current_pt['rh'] / 100.0, temperature[index]))
+            water_vapor_temp    = relative_humidity_to_specific_humidity(current_pt['rh'] / 100.0, temperature[index])
+            water_vapor_temp[water_vapor_temp < WATER_VAPOR_MINIMUM] = WATER_VAPOR_MINIMUM # make sure we have a minimum so we get valid results from the log
+            water_vapor[index]  = numpy.log(water_vapor_temp)
             # ozone is the log of the specific humidity
             temp_ozone_mr       = current_pt[VR_OZONE_MR_KEY]
             ozone[index]        = numpy.log(temp_ozone_mr / (temp_ozone_mr + 1)) # convert from mixing ratio to specific humidity and take the log

@@ -88,6 +88,7 @@ OUT_FG_SEL_PRESSURE_GRID_VAR_NAME      = 'selp'
 SURFACE_EMISSIVITY_COEFFICIENTS        = numpy.array([numpy.nan, numpy.nan, numpy.nan, numpy.nan ,numpy.nan]) # todo get constants from Paolo
 CELSIUS_TO_KELVIN_ADD_CONST            = 273.15
 C02_CONST_STARTING_PT_IN_PPMV          = 394.0
+WATER_VAPOR_MINIMUM                    = 3.0e-6
 
 def main():
 
